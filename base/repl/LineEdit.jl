@@ -620,45 +620,54 @@ function edit_werase(buf::IOBuffer)
     pos1 = position(buf)
     char_move_word_left(buf, isspace)
     pos0 = position(buf)
-    pos0 < pos1 || return false
     edit_splice!(buf, pos0 => pos1)
-    true
 end
 
 function edit_werase(s::MIState)
     push_undo(s)
-    edit_werase(buffer(s)) ? refresh_line(s) : pop_undo(s)
-    :edit_werase
+    if push_kill!(s, edit_werase(buffer(s)), rev=true)
+        refresh_line(s)
+        :edit_werase
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function edit_delete_prev_word(buf::IOBuffer)
     pos1 = position(buf)
     char_move_word_left(buf)
     pos0 = position(buf)
-    pos0 < pos1 || return false
     edit_splice!(buf, pos0 => pos1)
-    true
 end
 
 function edit_delete_prev_word(s::MIState)
     push_undo(s)
-    edit_delete_prev_word(buffer(s)) ? refresh_line(s) : pop_undo(s)
-    :edit_delete_prev_word
+    if push_kill!(s, edit_delete_prev_word(buffer(s)), rev=true)
+        refresh_line(s)
+        :edit_delete_prev_word
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function edit_delete_next_word(buf::IOBuffer)
     pos0 = position(buf)
     char_move_word_right(buf)
     pos1 = position(buf)
-    pos0 < pos1 || return false
     edit_splice!(buf, pos0 => pos1)
-    true
 end
 
 function edit_delete_next_word(s)
     push_undo(s)
-    edit_delete_next_word(buffer(s)) ? refresh_line(s) : pop_undo(s)
-    :edit_delete_next_word
+    if push_kill!(s, edit_delete_next_word(buffer(s)))
+        refresh_line(s)
+        :edit_delete_next_word
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function edit_yank(s::MIState)
@@ -686,10 +695,14 @@ function edit_yank_pop(s::MIState, require_previous_yank=true)
     end
 end
 
-function push_kill!(s::MIState, killed::String, concat=false)
+function push_kill!(s::MIState, killed::String, concat = s.key_repeats > 0; rev=false)
     isempty(killed) && return false
-    if concat
-        s.kill_ring[end] *= killed
+    if concat && !isempty(s.kill_ring)
+        if rev # keep expected order for edit_werase & edit_delete_prev_word
+            s.kill_ring[end] = killed * s.kill_ring[end]
+        else
+            s.kill_ring[end] *= killed
+        end
     else
         push!(s.kill_ring, killed)
         length(s.kill_ring) > KILL_RING_MAX[] && shift!(s.kill_ring)
@@ -707,7 +720,7 @@ function edit_kill_line(s::MIState)
         killbuf = killbuf[1:end-1]
         char_move_left(buf)
     end
-    push_kill!(s, killbuf, s.key_repeats > 0) || return :ignore
+    push_kill!(s, killbuf) || return :ignore
     edit_splice!(buf, pos => position(buf))
     refresh_line(s)
     :edit_kill_line
@@ -715,7 +728,7 @@ end
 
 function edit_copy_region(s::MIState)
     buf = buffer(s)
-    push_kill!(s, content(buf, region(buf))) || return :ignore
+    push_kill!(s, content(buf, region(buf)), false) || return :ignore
     if REGION_ANIMATION_DURATION[] > 0.0
         edit_exchange_point_and_mark(s)
         sleep(REGION_ANIMATION_DURATION[])
@@ -725,7 +738,7 @@ function edit_copy_region(s::MIState)
 end
 
 function edit_kill_region(s::MIState)
-    push_kill!(s, edit_splice!(s)) || return :ignore
+    push_kill!(s, edit_splice!(s), false) || return :ignore
     push_undo(s)
     refresh_line(s)
     :edit_kill_region
@@ -802,6 +815,7 @@ edit_clear(buf::IOBuffer) = truncate(buf, 0)
 
 function edit_clear(s::MIState)
     push_undo(s)
+    push_kill!(s, content(s), false) || return :ignore
     edit_clear(buffer(s))
     refresh_line(s)
     :edit_clear
