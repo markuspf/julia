@@ -24,7 +24,12 @@ else
 UV_FLAGS := --disable-shared $(UV_MFLAGS)
 endif
 
-$(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
+
+$(SRCCACHE)/$(LIBUV_SRC_DIR)/libuv-dfly.patch-applied: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LIBUV_SRC_DIR) && patch -f < $(SRCDIR)/patches/bundled_libuv_dfly.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/libuv-dfly.patch-applied
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/Makefile.in
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/configure
