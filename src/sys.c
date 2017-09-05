@@ -18,7 +18,7 @@
 #include <psapi.h>
 #else
 #include <unistd.h>
-#if !defined(_SC_NPROCESSORS_ONLN) || defined(_OS_FREEBSD_) || defined(_OS_DARWIN_)
+#if !defined(_SC_NPROCESSORS_ONLN) || defined(_OS_FREEBSD_) || defined(_OS_DARWIN_) || defined(_OS_DRAGONFLY_)
 // try secondary location for _SC_NPROCESSORS_ONLN, or for HW_AVAILCPU on BSDs
 #include <sys/sysctl.h>
 #endif

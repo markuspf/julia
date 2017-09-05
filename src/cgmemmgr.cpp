@@ -21,7 +21,7 @@
 #    define MAP_ANONYMOUS MAP_ANON
 #  endif
 #endif
-#ifdef _OS_FREEBSD_
+#if defined(_OS_FREEBSD_) || defined(_OS_DRAGONFLY_)
 #  include <sys/types.h>
 #endif
 #include "julia_assert.h"

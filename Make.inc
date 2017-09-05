@@ -361,6 +361,13 @@ USEGCC := 0
 USECLANG := 1
 endif
 
+ifeq ($(OS), DragonFly)
+USEGCC := 1
+USECLANG := 0
+USE_SYSTEM_LIBUNWIND := 0
+endif
+
+
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
@@ -507,7 +514,9 @@ else
 build_shlibdir := $(build_libdir)
 endif
 
-ifeq ($(OS), FreeBSD)
+ifeq ($(OS), DragonFly)
+LOCALBASE ?= /usr/local
+else ifeq ($(OS), FreeBSD)
 LOCALBASE ?= /usr/local
 else
 LOCALBASE ?= /usr
@@ -966,6 +975,11 @@ OSLIBS += -lgcc_s
 
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
+endif
+
+ifeq ($(OS), DragonFly)
+JLDFLAGS := -Wl,-Bdynamic
+OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE)
 endif
 
 ifeq ($(OS), Darwin)

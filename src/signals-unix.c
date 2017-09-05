@@ -22,7 +22,7 @@
 // Figure out the best signals/timers to use for this platform
 #ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
-#elif defined(__FreeBSD__) // generic bsd
+#elif defined(__FreeBSD__) || defined(__DragonFly__) // generic bsd
 #define HAVE_ITIMER
 #else // generic linux
 #define HAVE_TIMER

@@ -52,7 +52,7 @@ fi
 
 date_string=$git_time
 case $(uname) in
-  Darwin | FreeBSD)
+  Darwin | FreeBSD | DragonFly)
     date_string="$(/bin/date -jr $git_time -u '+%Y-%m-%d %H:%M %Z')"
     ;;
   MINGW*)

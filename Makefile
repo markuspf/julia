@@ -401,7 +401,7 @@ ifeq ($(OS), Darwin)
 	done
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
-		patchelf --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $$julia; \
+		patchelf --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)'":`cc -print-file-name=`" $$julia; \
 	done
 endif
 
