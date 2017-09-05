@@ -109,42 +109,49 @@ mktempdir() do tmpdir
     wait(tsk)
 end
 
-@test !isempty(getalladdrinfo("localhost")::Vector{IPAddr})
-@test getaddrinfo("localhost", IPv4) === ip"127.0.0.1"
-@test getaddrinfo("localhost", IPv6) === ip"::1"
+@test getnameinfo(ip"0.0.0.0") == "0.0.0.0"
+@test getnameinfo(ip"::") == "::"
+let localhost = getnameinfo(ip"127.0.0.1")
+    @test !isempty(localhost) && localhost != "127.0.0.1"
+    @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
+    @test getaddrinfo(localhost, IPv4) === ip"127.0.0.1"
+    @test getaddrinfo(localhost, IPv6) === ip"::1"
+    @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(localhost, 21452)
+end
 @test_throws Base.DNSError getaddrinfo(".invalid")
 @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
-@test_throws Base.UVError connect("localhost", 21452)
 
 # test invalid port
-@test_throws ArgumentError connect(ip"127.0.0.1",-1)
+@test_throws ArgumentError connect(ip"127.0.0.1", -1)
 @test_throws ArgumentError connect(ip"127.0.0.1", typemax(UInt16)+1)
 @test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", -1)
 @test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", typemax(UInt16)+1)
 
-p, server = listenany(defaultport)
-r = Channel(1)
-tsk = @async begin
-    put!(r, :start)
-    @test_throws Base.UVError accept(server)
+let (p, server) = listenany(defaultport)
+    r = Channel(1)
+    tsk = @async begin
+        put!(r, :start)
+        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(server)
+    end
+    @test fetch(r) === :start
+    close(server)
+    wait(tsk)
 end
-@test fetch(r) === :start
-close(server)
-wait(tsk)
 
-port, server = listenany(defaultport)
-@async connect("localhost",port)
-s1 = accept(server)
-@test_throws ErrorException accept(server,s1)
-@test_throws Base.UVError listen(port)
-port2, server2 = listenany(port)
-@test port != port2
-close(server)
-close(server2)
+let (port, server) = listenany(defaultport)
+    @async connect("localhost", port)
+    s1 = accept(server)
+    @test_throws ErrorException accept(server, s1)
+    @test_throws Base.UVError listen(port)
+    port2, server2 = listenany(port)
+    @test port != port2
+    close(server)
+    close(server2)
+end
 
 @test_throws Base.DNSError connect(".invalid",80)
 
-begin
+let port = defaultport
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"127.0.0.1", port)
@@ -174,57 +181,58 @@ begin
     send(b, ip"127.0.0.1", port, "Hello World")
     wait(tsk)
 
-    @test_throws MethodError bind(UDPSocket(),port)
+    @test_throws MethodError bind(UDPSocket(), port)
 
     close(a)
     close(b)
 end
-if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    a = UDPSocket()
-    b = UDPSocket()
-    bind(a, ip"::1", UInt16(port))
-    bind(b, ip"::1", UInt16(port+1))
 
-    tsk = @async begin
-        @test begin
-            (addr, data) = recvfrom(a)
-            addr == ip"::1" && String(data) == "Hello World"
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    let port = defaultport
+        a = UDPSocket()
+        b = UDPSocket()
+        bind(a, ip"::1", UInt16(port))
+        bind(b, ip"::1", UInt16(port + 1))
+
+        tsk = @async begin
+            @test begin
+                (addr, data) = recvfrom(a)
+                addr == ip"::1" && String(data) == "Hello World"
+            end
         end
+        send(b, ip"::1", port, "Hello World")
+        wait(tsk)
     end
-    send(b, ip"::1", port, "Hello World")
-    wait(tsk)
 end
 
-begin
-    for (addr, porthint) in [(IPv4("127.0.0.1"), UInt16(11011)),
-                        (IPv6("::1"), UInt16(11012)), (getipaddr(), UInt16(11013))]
-        port, listen_sock = listenany(addr, porthint)
-        gsn_addr, gsn_port = getsockname(listen_sock)
+for (addr, porthint) in [(IPv4("127.0.0.1"), UInt16(11011)),
+                    (IPv6("::1"), UInt16(11012)), (getipaddr(), UInt16(11013))]
+    port, listen_sock = listenany(addr, porthint)
+    gsn_addr, gsn_port = getsockname(listen_sock)
 
-        @test addr == gsn_addr
-        @test port == gsn_port
+    @test addr == gsn_addr
+    @test port == gsn_port
 
-        @test_throws MethodError getpeername(listen_sock)
+    @test_throws MethodError getpeername(listen_sock)
 
-        # connect to it
-        client_sock = connect(addr, port)
-        server_sock = accept(listen_sock)
+    # connect to it
+    client_sock = connect(addr, port)
+    server_sock = accept(listen_sock)
 
-        self_client_addr, self_client_port = getsockname(client_sock)
-        peer_client_addr, peer_client_port = getpeername(client_sock)
-        self_srvr_addr, self_srvr_port = getsockname(server_sock)
-        peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
+    self_client_addr, self_client_port = getsockname(client_sock)
+    peer_client_addr, peer_client_port = getpeername(client_sock)
+    self_srvr_addr, self_srvr_port = getsockname(server_sock)
+    peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
 
-        @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
+    @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
 
-        @test peer_client_port == self_srvr_port
-        @test peer_srvr_port == self_client_port
-        @test self_srvr_port != self_client_port
+    @test peer_client_port == self_srvr_port
+    @test peer_srvr_port == self_client_port
+    @test self_srvr_port != self_client_port
 
-        close(listen_sock)
-        close(client_sock)
-        close(server_sock)
-    end
+    close(listen_sock)
+    close(client_sock)
+    close(server_sock)
 end
 
 # Local-machine broadcast
